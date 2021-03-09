@@ -1,0 +1,91 @@
+from sqlalchemy import create_engine
+from sqlalchemy.ext.declarative import declarative_base
+from sqlalchemy import Column, Integer, String, Date
+from datetime import datetime, timedelta
+from sqlalchemy.orm import sessionmaker
+engine = create_engine('sqlite:///todo.db?check_same_thread=False')
+Base = declarative_base()
+
+
+class Table(Base):
+    __tablename__ = 'task'
+    id = Column(Integer, primary_key=True)
+    task = Column(String, default='default_value')
+    deadline = Column(Date, default=datetime.today())
+
+    def __repr__(self):
+        return self.task
+
+
+Base.metadata.create_all(engine)
+Session = sessionmaker(bind=engine)
+session = Session()
+# End of setup
+status_exit = False
+while status_exit is False:
+    selection = input('1) Today\'s tasks\n2) Week\'s tasks\n3) All tasks\n4) Missed tasks\n5) Add task\n6) Delete task\n0) Exit\n')
+    if selection == '0':
+        print('\nBye!')
+        # status_exit = True
+        break
+    if selection == '5':
+        input_task = input('Enter task\n')
+        input_deadline = input('Enter deadline')
+        new_row = Table(task='{}'.format(input_task),
+        deadline=datetime.strptime('{}'.format(input_deadline), '%Y-%m-%d').date())
+        session.add(new_row)
+        session.commit()
+        print('The task has been added!\n')
+    elif selection == '1':
+        rows = session.query(Table).filter(Table.deadline == datetime.today().date()).all()
+        if bool(rows) is False:
+            # minus sign at the front removes '0'
+            print(str('Today ' + datetime.today().date().strftime('%-d %b') + ':') + '\nNothing to do!\n')
+        else:
+            rows = session.query(Table).filter(Table.deadline == datetime.today().date()).all()
+            print('Today ' + datetime.today().date().strftime('%-d %b') + ':')
+            for i in range(len(rows)):
+                print(str(rows[i].id) + '. ' + str(rows[i]))
+    elif selection == '2':
+        rows = session.query(Table).filter(Table.deadline != datetime.today().strftime('%U')).order_by(Table.deadline).all()
+        today_num = int(datetime.today().strftime('%w'))
+        for i in range(7):
+            task_num = 1
+            no_task = False
+            # weekday = (datetime.today().date() - timedelta(days=today_num) + timedelta(days=i)).strftime('%A %-d %b')
+            weekday = (datetime.today().date() + timedelta(days=i)).strftime('%A %-d %b')
+            print('\n' + weekday + ':')
+            for j in rows:
+                if weekday == j.deadline.strftime('%A %-d %b'):
+                    print(str(task_num) + '. ' + str(j))
+                    task_num = task_num + 1
+                else:
+                    no_task = True
+            if no_task:
+                print('Nothing to do!')
+    elif selection == '3':
+        rows = session.query(Table).order_by(Table.deadline).all()
+        for i in range(len(rows)):
+            print(str(rows[i].id) + '. ' + str(rows[i]) + '. ' + rows[i].deadline.strftime('%-d %b'))
+    elif selection == '4':
+        rows = session.query(Table).filter(Table.deadline < datetime.today().date()).order_by(Table.deadline).all()
+        print('Missed tasks:')
+        if not bool(rows):
+            print('Nothing is missed!\n')
+        else:
+            task_num = 1
+            for i in rows:
+                print(str(task_num) + '. ' + str(i) + ' ' + i.deadline.strftime('%-d %b'))
+                task_num += 1
+            print('')
+    elif selection == '6':
+        rows = session.query(Table).order_by(Table.id).all()
+        task_num = 1
+        print('Choose the number of the task you want to delete:')
+        for i in rows:
+            print(str(task_num) + '. ' + str(i) + ' ' + i.deadline.strftime('%-d %b'))
+            task_num += 1
+        id_selection = input()
+        session.query(Table).filter(Table.task == str(i)).delete()
+        session.commit()
+        print('The task has been deleted!')
